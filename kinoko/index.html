@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ダメージ期待値計算ツール</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <header class="app-header">
+    <h1>ダメージ期待値計算ツール</h1>
+    <p class="app-header__subtitle">
+      攻撃側と防御側のステータスから、単一攻撃の期待ダメージを計算します。
+    </p>
+  </header>
+
+  <main class="app-main">
+    <section class="card">
+      <h2>自分（仲間）ステータス</h2>
+      <div class="form-grid">
+        <label class="form-field">
+          <span>攻撃力</span>
+          <input id="allyAtk" type="number" inputmode="decimal" placeholder="例: 1200" />
+        </label>
+        <label class="form-field">
+          <span>仲間ダメージ（%）</span>
+          <input id="allyDamage" type="number" inputmode="numeric" placeholder="例: 20（+20%）" />
+          <small>0〜100以上のパーセント値を入力（例: 20 → +20%）</small>
+        </label>
+        <label class="form-field">
+          <span>仲間連撃率（%）</span>
+          <input id="allyMultiRate" type="number" inputmode="numeric" placeholder="例: 25（25%）" />
+          <small>0〜100以上のパーセント値を入力（例: 25 → 25%）</small>
+        </label>
+        <label class="form-field">
+          <span>仲間会心率（%）</span>
+          <input id="allyCritRate" type="number" inputmode="numeric" placeholder="例: 35（35%）" />
+          <small>0〜100以上のパーセント値を入力（例: 35 → 35%）</small>
+        </label>
+        <label class="form-field">
+          <span>鼓舞関連（将来拡張用）</span>
+          <input id="allyInspire" type="number" step="0.01" inputmode="decimal" placeholder="未使用（メモ用）" />
+        </label>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>相手ステータス</h2>
+      <div class="form-grid">
+        <label class="form-field">
+          <span>防御力</span>
+          <input id="enemyDef" type="number" inputmode="decimal" placeholder="例: 800" />
+        </label>
+        <label class="form-field">
+          <span>仲間ダメージ軽減（%）</span>
+          <input id="allyDamageReduction" type="number" inputmode="numeric" placeholder="例: 10（10%軽減）" />
+          <small>0〜100以上のパーセント値を入力（例: 10 → 10%軽減）</small>
+        </label>
+        <label class="form-field">
+          <span>連撃無視（%）</span>
+          <input id="multiIgnore" type="number" inputmode="numeric" placeholder="例: 10（10%）" />
+          <small>0〜100以上のパーセント値を入力（例: 10 → 10%）</small>
+        </label>
+        <label class="form-field">
+          <span>会心無視（%）</span>
+          <input id="critIgnore" type="number" inputmode="numeric" placeholder="例: 15（15%）" />
+          <small>0〜100以上のパーセント値を入力（例: 15 → 15%）</small>
+        </label>
+        <label class="form-field">
+          <span>抵抗関連（将来拡張用）</span>
+          <input id="enemyResistExtra" type="number" step="0.01" inputmode="decimal" placeholder="未使用（メモ用）" />
+        </label>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>連撃・会心の詳細設定</h2>
+      <div class="form-grid">
+        <label class="form-field">
+          <span>連撃ダメージ係数</span>
+          <input id="multiCoeff" type="number" step="0.01" inputmode="decimal" placeholder="例: 1.0（連撃で+100%）" />
+          <small>追加分の倍率。1.0 なら通常ダメージの +100% で合計 2倍。</small>
+        </label>
+        <label class="form-field">
+          <span>会心ダメージ係数</span>
+          <input id="critCoeff" type="number" step="0.01" inputmode="decimal" placeholder="例: 0.5（会心で+50%）" />
+          <small>追加分の倍率。0.5 なら通常ダメージの +50% で合計 1.5倍。</small>
+        </label>
+        <label class="form-field">
+          <span>会心ダメージ（分子）</span>
+          <input id="critDamage" type="number" step="0.01" inputmode="decimal" placeholder="例: 1.5" />
+          <small>会心ダメージ / 会心抵抗 の「会心ダメージ」に相当する値。</small>
+        </label>
+        <label class="form-field">
+          <span>会心抵抗（% / 分母）</span>
+          <input id="critResist" type="number" inputmode="numeric" placeholder="例: 30（30%）" />
+          <small>会心ダメージ / (会心抵抗%) で使用。0 の場合は 1 として扱います。</small>
+        </label>
+      </div>
+    </section>
+
+    <section class="card card--actions">
+      <button id="calcButton" class="primary-button">期待ダメージを計算</button>
+      <button id="resetButton" class="secondary-button">入力をリセット</button>
+      <p class="note">
+        ※ 数値はすべて 0 以上を想定しています。確率は 0 以上であれば 100% を超えてもそのまま計算に使用します。
+      </p>
+      <p class="note">
+        ※ 鼓舞・抵抗は現在の期待値計算には含めていません（将来拡張予定）。
+      </p>
+    </section>
+
+    <section class="card">
+      <h2>計算結果</h2>
+      <div id="resultError" class="result-error" aria-live="polite"></div>
+      <div class="result-grid">
+        <div class="result-item">
+          <span class="result-label">基本ダメージ</span>
+          <span id="baseDamageOutput" class="result-value">-</span>
+        </div>
+        <div class="result-item">
+          <span class="result-label">期待ダメージ</span>
+          <span id="expectedDamageOutput" class="result-value">-</span>
+        </div>
+        <div class="result-item">
+          <span class="result-label">連撃発生確率</span>
+          <span id="pMultiOutput" class="result-value">-</span>
+        </div>
+        <div class="result-item">
+          <span class="result-label">会心発生確率</span>
+          <span id="pCritOutput" class="result-value">-</span>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="app-footer">
+    <p>ダメージ計算式: (攻撃力 - 防御力) × (仲間ダメージ - 仲間ダメージ軽減) × (会心ダメージ / 会心抵抗)</p>
+  </footer>
+
+  <script src="./main.js"></script>
+</body>
+</html>
+  <header class="app-header">
+    <h1>ダメージ期待値計算ツール</h1>
+    <p class="app-header__subtitle">
+      攻撃側と防御側のステータスから、単一攻撃の期待ダメージを計算します。
+    </p>
+  </header>
+
+  <main class="app-main">
+    <section class="card">
+      <h2>自分（仲間）ステータス</h2>
+      <div class="form-grid">
+        <label class="form-field">
+          <span>攻撃力</span>
+          <input id="allyAtk" type="number" inputmode="decimal" placeholder="例: 1200" />
+        </label>
+        <label class="form-field">
+          <span>仲間ダメージ係数</span>
+          <input id="allyDamage" type="number" step="0.01" inputmode="decimal" placeholder="例: 1.20（+20%）" />
+        </label>
+        <label class="form-field">
+          <span>仲間連撃率</span>
+          <input id="allyMultiRate" type="number" step="0.01" inputmode="decimal" placeholder="例: 0.25（25%）" />
+          <small>0以上の数値で入力（例: 0.25 / 1.5 / 150 など）</small>
+        </label>
+        <label class="form-field">
+          <span>仲間会心率</span>
+          <input id="allyCritRate" type="number" step="0.01" inputmode="decimal" placeholder="例: 0.35（35%）" />
+          <small>0以上の数値で入力（例: 0.35 / 1.2 / 150 など）</small>
+        </label>
+        <label class="form-field">
+          <span>鼓舞関連（将来拡張用）</span>
+          <input id="allyInspire" type="number" step="0.01" inputmode="decimal" placeholder="未使用（メモ用）" />
+        </label>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>相手ステータス</h2>
+      <div class="form-grid">
+        <label class="form-field">
+          <span>防御力</span>
+          <input id="enemyDef" type="number" inputmode="decimal" placeholder="例: 800" />
+        </label>
+        <label class="form-field">
+          <span>仲間ダメージ軽減係数</span>
+          <input id="allyDamageReduction" type="number" step="0.01" inputmode="decimal" placeholder="例: 0.10（10%軽減）" />
+        </label>
+        <label class="form-field">
+          <span>連撃無視</span>
+          <input id="multiIgnore" type="number" step="0.01" inputmode="decimal" placeholder="例: 0.10（10%）" />
+          <small>0以上の数値で入力（例: 0.1 / 1.0 / 100 など）</small>
+        </label>
+        <label class="form-field">
+          <span>会心無視</span>
+          <input id="critIgnore" type="number" step="0.01" inputmode="decimal" placeholder="例: 0.15（15%）" />
+          <small>0以上の数値で入力（例: 0.15 / 1.0 / 100 など）</small>
+        </label>
+        <label class="form-field">
+          <span>抵抗関連（将来拡張用）</span>
+          <input id="enemyResistExtra" type="number" step="0.01" inputmode="decimal" placeholder="未使用（メモ用）" />
+        </label>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>連撃・会心の詳細設定</h2>
+      <div class="form-grid">
+        <label class="form-field">
+          <span>連撃ダメージ係数</span>
+          <input id="multiCoeff" type="number" step="0.01" inputmode="decimal" placeholder="例: 1.0（連撃で+100%）" />
+          <small>追加分の倍率。1.0 なら通常ダメージの +100% で合計 2倍。</small>
+        </label>
+        <label class="form-field">
+          <span>会心ダメージ係数</span>
+          <input id="critCoeff" type="number" step="0.01" inputmode="decimal" placeholder="例: 0.5（会心で+50%）" />
+          <small>追加分の倍率。0.5 なら通常ダメージの +50% で合計 1.5倍。</small>
+        </label>
+        <label class="form-field">
+          <span>会心抵抗</span>
+          <input id="critResist" type="number" step="0.01" inputmode="decimal" placeholder="例: 0.0（抵抗なし）" />
+        </label>
+      </div>
+    </section>
+
+    <section class="card card--actions">
+      <button id="calcButton" class="primary-button">期待ダメージを計算</button>
+      <button id="resetButton" class="secondary-button">入力をリセット</button>
+      <p class="note">
+        ※ 数値はすべて 0 以上を想定しています。確率は 0 以上であれば 100% を超えてもそのまま計算に使用します。
+      </p>
+      <p class="note">
+        ※ 鼓舞・抵抗は現在の期待値計算には含めていません（将来拡張予定）。
+      </p>
+    </section>
+
+    <section class="card">
+      <h2>計算結果</h2>
+      <div id="resultError" class="result-error" aria-live="polite"></div>
+      <div class="result-grid">
+        <div class="result-item">
+          <span class="result-label">基本ダメージ</span>
+          <span id="baseDamageOutput" class="result-value">-</span>
+        </div>
+        <div class="result-item">
+          <span class="result-label">期待ダメージ</span>
+          <span id="expectedDamageOutput" class="result-value">-</span>
+        </div>
+        <div class="result-item">
+          <span class="result-label">連撃発生確率</span>
+          <span id="pMultiOutput" class="result-value">-</span>
+        </div>
+        <div class="result-item">
+          <span class="result-label">会心発生確率</span>
+          <span id="pCritOutput" class="result-value">-</span>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="app-footer">
+    <p>ダメージ計算式: (攻撃力 - 防御力) × (仲間ダメージ - 仲間ダメージ軽減) × (会心ダメージ / 会心抵抗)</p>
+  </footer>
+
+  <script src="./main.js"></script>
+</body>
+</html>
+
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ダメージ期待値計算ツール</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <header class="app-header">
+    <h1>ダメージ期待値計算ツール</h1>
+    <p class="app-header__subtitle">
+      攻撃側と防御側のステータスから、単一攻撃の期待ダメージを計算します。
+    </p>
+  </header>
+
+  <main class="app-main">
+    <section class="card">
+      <h2>自分（仲間）ステータス</h2>
+      <div class="form-grid">
+        <label class="form-field">
+          <span>攻撃力</span>
+          <input id="allyAtk" type="number" inputmode="decimal" placeholder="例: 1200" />
+        </label>
+        <label class="form-field">
+          <span>仲間ダメージ係数</span>
+          <input id="allyDamage" type="number" step="0.01" inputmode="decimal" placeholder="例: 1.20（+20%）" />
+        </label>
+        <label class="form-field">
+          <span>仲間連撃率</span>
+          <input id="allyMultiRate" type="number" step="0.01" inputmode="decimal" placeholder="例: 0.25（25%）" />
+          <small>0〜1 の小数で入力</small>
+        </label>
+        <label class="form-field">
+          <span>仲間会心率</span>
+          <input id="allyCritRate" type="number" step="0.01" inputmode="decimal" placeholder="例: 0.35（35%）" />
+          <small>0〜1 の小数で入力</small>
+        </label>
+        <label class="form-field">
+          <span>鼓舞関連（将来拡張用）</span>
+          <input id="allyInspire" type="number" step="0.01" inputmode="decimal" placeholder="未使用（メモ用）" />
+        </label>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>相手ステータス</h2>
+      <div class="form-grid">
+        <label class="form-field">
+          <span>防御力</span>
+          <input id="enemyDef" type="number" inputmode="decimal" placeholder="例: 800" />
+        </label>
+        <label class="form-field">
+          <span>仲間ダメージ軽減係数</span>
+          <input id="allyDamageReduction" type="number" step="0.01" inputmode="decimal" placeholder="例: 0.10（10%軽減）" />
+        </label>
+        <label class="form-field">
+          <span>連撃無視</span>
+          <input id="multiIgnore" type="number" step="0.01" inputmode="decimal" placeholder="例: 0.10（10%）" />
+          <small>0〜1 の小数で入力</small>
+        </label>
+        <label class="form-field">
+          <span>会心無視</span>
+          <input id="critIgnore" type="number" step="0.01" inputmode="decimal" placeholder="例: 0.15（15%）" />
+          <small>0〜1 の小数で入力</small>
+        </label>
+        <label class="form-field">
+          <span>抵抗関連（将来拡張用）</span>
+          <input id="enemyResistExtra" type="number" step="0.01" inputmode="decimal" placeholder="未使用（メモ用）" />
+        </label>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>連撃・会心の詳細設定</h2>
+      <div class="form-grid">
+        <label class="form-field">
+          <span>連撃ダメージ係数</span>
+          <input id="multiCoeff" type="number" step="0.01" inputmode="decimal" placeholder="例: 1.0（連撃で+100%）" />
+          <small>追加分の倍率。1.0 なら通常ダメージの +100% で合計 2倍。</small>
+        </label>
+        <label class="form-field">
+          <span>会心ダメージ係数</span>
+          <input id="critCoeff" type="number" step="0.01" inputmode="decimal" placeholder="例: 0.5（会心で+50%）" />
+          <small>追加分の倍率。0.5 なら通常ダメージの +50% で合計 1.5倍。</small>
+        </label>
+        <label class="form-field">
+          <span>会心抵抗</span>
+          <input id="critResist" type="number" step="0.01" inputmode="decimal" placeholder="例: 0.0（抵抗なし）" />
+        </label>
+      </div>
+    </section>
+
+    <section class="card card--actions">
+      <button id="calcButton" class="primary-button">期待ダメージを計算</button>
+      <button id="resetButton" class="secondary-button">入力をリセット</button>
+      <p class="note">
+        ※ 数値はすべて 0 以上を想定しています。確率は 0〜1 の範囲に自動で調整されます。
+      </p>
+      <p class="note">
+        ※ 鼓舞・抵抗は現在の期待値計算には含めていません（将来拡張予定）。
+      </p>
+    </section>
+
+    <section class="card">
+      <h2>計算結果</h2>
+      <div id="resultError" class="result-error" aria-live="polite"></div>
+      <div class="result-grid">
+        <div class="result-item">
+          <span class="result-label">基本ダメージ</span>
+          <span id="baseDamageOutput" class="result-value">-</span>
+        </div>
+        <div class="result-item">
+          <span class="result-label">期待ダメージ</span>
+          <span id="expectedDamageOutput" class="result-value">-</span>
+        </div>
+        <div class="result-item">
+          <span class="result-label">連撃発生確率</span>
+          <span id="pMultiOutput" class="result-value">-</span>
+        </div>
+        <div class="result-item">
+          <span class="result-label">会心発生確率</span>
+          <span id="pCritOutput" class="result-value">-</span>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="app-footer">
+    <p>ダメージ計算式: (攻撃力 - 防御力) × (仲間ダメージ - 仲間ダメージ軽減) × (会心ダメージ - 会心抵抗)</p>
+  </footer>
+
+  <script src="./main.js"></script>
+</body>
+</html>

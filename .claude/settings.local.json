@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Skill(claude-api)",
+      "Bash(python -c \":*)",
+      "Bash(py --version)",
+      "Bash(py -3 --version)",
+      "Read(//c/Users/kcdpk/AppData/Local/Programs/**)",
+      "Bash(ls /c/Python*)",
+      "Read(//c/Users/kcdpk/**)"
+    ]
+  }
+}
