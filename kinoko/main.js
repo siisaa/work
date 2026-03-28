@@ -1,197 +1,147 @@
-function toNumber(value) {
-  if (value === "" || value === null || value === undefined) return NaN;
-  return Number(value);
+// ---- 入力取得 ----
+
+function getVal(id) {
+  const v = parseFloat(document.getElementById(id).value);
+  return isNaN(v) ? null : v;
 }
 
-function formatNumber(value) {
-  if (!Number.isFinite(value)) return "-";
-  return value.toFixed(2);
-}
-
-function getInputValues() {
-  const allyAtk = toNumber(document.getElementById("allyAtk").value);
-  const allyDamage = toNumber(document.getElementById("allyDamage").value);
-  const allyMultiRate = toNumber(
-    document.getElementById("allyMultiRate").value
-  );
-  const allyCritRate = toNumber(document.getElementById("allyCritRate").value);
-  const enemyDef = toNumber(document.getElementById("enemyDef").value);
-  const allyDamageReduction = toNumber(
-    document.getElementById("allyDamageReduction").value
-  );
-  const multiIgnore = toNumber(
-    document.getElementById("multiIgnore").value
-  );
-  const critIgnore = toNumber(document.getElementById("critIgnore").value);
-  const multiCoeff = toNumber(
-    document.getElementById("multiCoeff").value
-  );
-  const critCoeff = toNumber(document.getElementById("critCoeff").value);
-  const critDamage = toNumber(
-    document.getElementById("critDamage").value
-  );
-  const critResist = toNumber(
-    document.getElementById("critResist").value
-  );
-
+function getInputs() {
   return {
-    allyAtk,
-    allyDamage,
-    allyMultiRate,
-    allyCritRate,
-    enemyDef,
-    allyDamageReduction,
-    multiIgnore,
-    critIgnore,
-    multiCoeff,
-    critCoeff,
-    critDamage,
-    critResist,
+    atk:             getVal("atk"),
+    def:             getVal("def"),
+    allyDamage:      getVal("allyDamage"),
+    damageReduction: getVal("damageReduction") ?? 0,
+    multiRate:       getVal("multiRate")       ?? 0,
+    multiIgnore:     getVal("multiIgnore")     ?? 0,
+    critRate:        getVal("critRate")        ?? 0,
+    critIgnore:      getVal("critIgnore")      ?? 0,
+    critDamage:      getVal("critDamage")      ?? 0,
+    critResist:      getVal("critResist"),      // null = 未入力 → 100 扱い
+    inspire:         getVal("inspire")         ?? 0,
+    resist:          getVal("resist")          ?? 0,
   };
 }
 
-function validateInputs(values) {
-  const requiredFields = [
-    "allyAtk",
-    "allyDamage",
-    "enemyDef",
-    "allyDamageReduction",
-    "allyMultiRate",
-    "allyCritRate",
-    "multiIgnore",
-    "critIgnore",
-    "multiCoeff",
-    "critCoeff",
-    "critDamage",
-    "critResist",
+// ---- 計算 ----
+
+function computeDamage(v) {
+  // 攻撃力・防御力・仲間ダメは必須
+  if (v.atk === null || v.def === null || v.allyDamage === null) return null;
+
+  const atkMinusDef = Math.max(0, v.atk - v.def);
+
+  // --- 期待有効ダメ軽減（鼓舞・抵抗の4パターン加重平均）---
+  const inspireEff = v.inspire / 100; // 数値/100 = %
+  const resistEff  = v.resist  / 100;
+  const P_INS = 0.3, P_RES = 0.3;
+
+  const scenarios = [
+    { p: (1 - P_INS) * (1 - P_RES), ins: false, res: false },
+    { p:       P_INS * (1 - P_RES), ins: true,  res: false },
+    { p: (1 - P_INS) *       P_RES, ins: false, res: true  },
+    { p:       P_INS *       P_RES, ins: true,  res: true  },
   ];
 
-  for (const key of requiredFields) {
-    if (!Number.isFinite(values[key])) {
-      return `入力が不足しているか数値として解釈できません: ${key}`;
-    }
-    if (values[key] < 0) {
-      return `0未満の値は想定していません: ${key}`;
-    }
+  let effReduction = 0;
+  for (const s of scenarios) {
+    const adj = v.damageReduction
+      - (s.ins ? inspireEff : 0)
+      + (s.res ? resistEff  : 0);
+    effReduction += s.p * Math.min(80, Math.max(0, adj));
   }
 
-  return null;
+  // --- 基本ダメージ ---
+  const baseDamage = atkMinusDef
+    * (v.allyDamage / 100)
+    * (1 - effReduction / 100);
+
+  // --- 連撃乗数 ---
+  const effectiveMultiRate = Math.max(0, v.multiRate - v.multiIgnore) / 100;
+  const multiMult = 1 + effectiveMultiRate; // 連撃は+100%
+
+  // --- 会心乗数 ---
+  const effectiveCritRate = Math.max(0, v.critRate - v.critIgnore) / 100;
+  const critResistVal = (v.critResist !== null && v.critResist > 0) ? v.critResist : 100;
+  const critEff = Math.max(1.5, v.critDamage / critResistVal);
+  const critMult = 1 + effectiveCritRate * (critEff - 1);
+
+  // --- 期待ダメージ ---
+  const expectedDamage = baseDamage * multiMult * critMult;
+
+  return { baseDamage, expectedDamage, effReduction, multiMult, critMult };
 }
 
-function computeDamage(values) {
-  const atkMinusDef = Math.max(0, values.allyAtk - values.enemyDef);
+// ---- 表示 ----
 
-  // %入力の値を 0〜1 に変換
-  const allyDamageRatio = values.allyDamage / 100;
-  const allyDamageReductionRatio = values.allyDamageReduction / 100;
-  const allyMultiRateRatio = values.allyMultiRate / 100;
-  const allyCritRateRatio = values.allyCritRate / 100;
-  const multiIgnoreRatio = values.multiIgnore / 100;
-  const critIgnoreRatio = values.critIgnore / 100;
-  const critResistRatio = values.critResist / 100;
-
-  const damageFactor = Math.max(
-    0,
-    allyDamageRatio - allyDamageReductionRatio
-  );
-
-  let critBaseFactor;
-  if (critResistRatio <= 0) {
-    // 分母が0以下の場合は割り算を避け、会心ダメージそのものを係数として扱う
-    critBaseFactor = Math.max(0, values.critDamage);
-  } else {
-    critBaseFactor = Math.max(0, values.critDamage / critResistRatio);
-  }
-
-  const baseDamage = atkMinusDef * damageFactor * critBaseFactor;
-
-  let pMulti = allyMultiRateRatio - multiIgnoreRatio;
-  let pCrit = allyCritRateRatio - critIgnoreRatio;
-
-  // 0未満は0に切り上げるが、上限は設けず 100% 超もそのまま使用する
-  pMulti = Math.max(0, pMulti);
-  pCrit = Math.max(0, pCrit);
-
-  const expectedMultiplier =
-    (1 + pMulti * values.multiCoeff) * (1 + pCrit * values.critCoeff);
-
-  const expectedDamage = baseDamage * expectedMultiplier;
-
-  return {
-    baseDamage,
-    expectedDamage,
-    pMulti,
-    pCrit,
-  };
+function fmt(n, digits = 0) {
+  if (!Number.isFinite(n)) return "-";
+  return n.toLocaleString("ja-JP", {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  });
 }
 
-function formatPercent(value) {
-  if (!Number.isFinite(value)) return "-";
-  return (value * 100).toFixed(2) + "%";
+function fmtMult(n) {
+  if (!Number.isFinite(n)) return "-";
+  return n.toFixed(3) + "x";
 }
 
-function updateResults(result, errorMessage) {
-  const errorEl = document.getElementById("resultError");
-  const baseDamageEl = document.getElementById("baseDamageOutput");
-  const expectedDamageEl = document.getElementById("expectedDamageOutput");
-  const pMultiEl = document.getElementById("pMultiOutput");
-  const pCritEl = document.getElementById("pCritOutput");
+function fmtPct(n) {
+  if (!Number.isFinite(n)) return "-";
+  return n.toFixed(1) + "%";
+}
 
-  if (errorMessage) {
-    errorEl.textContent = errorMessage;
-    baseDamageEl.textContent = "-";
-    expectedDamageEl.textContent = "-";
-    pMultiEl.textContent = "-";
-    pCritEl.textContent = "-";
+function render(result) {
+  const errorEl  = document.getElementById("resultError");
+  const expEl    = document.getElementById("expectedDamage");
+  const baseEl   = document.getElementById("baseDamage");
+  const redEl    = document.getElementById("effReduction");
+  const multiEl  = document.getElementById("multiMult");
+  const critEl   = document.getElementById("critMult");
+  const cardEl   = document.getElementById("resultCard");
+
+  if (!result) {
+    errorEl.textContent = "攻撃力・防御力・仲間ダメージを入力してください。";
+    expEl.textContent  = "-";
+    baseEl.textContent = "-";
+    redEl.textContent  = "-";
+    multiEl.textContent = "-";
+    critEl.textContent  = "-";
+    cardEl.classList.remove("has-result");
     return;
   }
 
   errorEl.textContent = "";
-  baseDamageEl.textContent = formatNumber(result.baseDamage);
-  expectedDamageEl.textContent = formatNumber(result.expectedDamage);
-  pMultiEl.textContent = formatPercent(result.pMulti);
-  pCritEl.textContent = formatPercent(result.pCrit);
+  expEl.textContent   = fmt(result.expectedDamage);
+  baseEl.textContent  = fmt(result.baseDamage);
+  redEl.textContent   = fmtPct(result.effReduction);
+  multiEl.textContent = fmtMult(result.multiMult);
+  critEl.textContent  = fmtMult(result.critMult);
+  cardEl.classList.add("has-result");
 }
 
-function handleCalculate() {
-  const values = getInputValues();
-  const error = validateInputs(values);
-  if (error) {
-    updateResults(null, error);
-    return;
-  }
+// ---- イベント ----
 
+function handleInput() {
+  const values = getInputs();
   const result = computeDamage(values);
-  updateResults(result, null);
+  render(result);
 }
 
 function handleReset() {
-  const inputs = document.querySelectorAll("input[type='number']");
-  inputs.forEach((input) => {
-    input.value = "";
+  document.querySelectorAll("input[type='number']").forEach(el => {
+    el.value = "";
   });
-
-  updateResults(
-    {
-      baseDamage: NaN,
-      expectedDamage: NaN,
-      pMulti: NaN,
-      pCrit: NaN,
-    },
-    ""
-  );
+  render(null);
+  document.getElementById("resultError").textContent = "";
+  document.getElementById("resultCard").classList.remove("has-result");
 }
 
 function init() {
-  const calcButton = document.getElementById("calcButton");
-  const resetButton = document.getElementById("resetButton");
-
-  if (calcButton) {
-    calcButton.addEventListener("click", handleCalculate);
-  }
-  if (resetButton) {
-    resetButton.addEventListener("click", handleReset);
-  }
+  document.querySelectorAll("input[type='number']").forEach(el => {
+    el.addEventListener("input", handleInput);
+  });
+  document.getElementById("resetButton").addEventListener("click", handleReset);
 }
 
 if (document.readyState === "loading") {
@@ -199,377 +149,3 @@ if (document.readyState === "loading") {
 } else {
   init();
 }
-
-function clamp(value, min, max) {
-  return Math.min(Math.max(value, min), max);
-}
-
-function toNumber(value) {
-  if (value === "" || value === null || value === undefined) return NaN;
-  return Number(value);
-}
-
-function formatNumber(value) {
-  if (!Number.isFinite(value)) return "-";
-  return value.toFixed(2);
-}
-
-function getInputValues() {
-  const allyAtk = toNumber(document.getElementById("allyAtk").value);
-  const allyDamage = toNumber(document.getElementById("allyDamage").value);
-  const allyMultiRate = toNumber(
-    document.getElementById("allyMultiRate").value
-  );
-  const allyCritRate = toNumber(document.getElementById("allyCritRate").value);
-  const enemyDef = toNumber(document.getElementById("enemyDef").value);
-  const allyDamageReduction = toNumber(
-    document.getElementById("allyDamageReduction").value
-  );
-  const multiIgnore = toNumber(
-    document.getElementById("multiIgnore").value
-  );
-  const critIgnore = toNumber(document.getElementById("critIgnore").value);
-  const multiCoeff = toNumber(
-    document.getElementById("multiCoeff").value
-  );
-  const critCoeff = toNumber(document.getElementById("critCoeff").value);
-  const critDamage = toNumber(
-    document.getElementById("critDamage").value
-  );
-  const critResist = toNumber(
-    document.getElementById("critResist").value
-  );
-
-  return {
-    allyAtk,
-    allyDamage,
-    allyMultiRate,
-    allyCritRate,
-    enemyDef,
-    allyDamageReduction,
-    multiIgnore,
-    critIgnore,
-    multiCoeff,
-    critCoeff,
-    critDamage,
-    critResist,
-  };
-}
-
-function validateInputs(values) {
-  const requiredFields = [
-    "allyAtk",
-    "allyDamage",
-    "enemyDef",
-    "allyDamageReduction",
-    "allyMultiRate",
-    "allyCritRate",
-    "multiIgnore",
-    "critIgnore",
-    "multiCoeff",
-    "critCoeff",
-    "critDamage",
-    "critResist",
-  ];
-
-  for (const key of requiredFields) {
-    if (!Number.isFinite(values[key])) {
-      return `入力が不足しているか数値として解釈できません: ${key}`;
-    }
-    if (values[key] < 0) {
-      return `0未満の値は想定していません: ${key}`;
-    }
-  }
-
-  return null;
-}
-
-function computeDamage(values) {
-  const atkMinusDef = Math.max(0, values.allyAtk - values.enemyDef);
-  const damageFactor = Math.max(
-    0,
-    values.allyDamage - values.allyDamageReduction
-  );
-  const critBaseFactor = Math.max(
-    0,
-    values.critDamage - values.critResist
-  );
-
-  const baseDamage = atkMinusDef * damageFactor * critBaseFactor;
-
-  let pMulti = values.allyMultiRate - values.multiIgnore;
-  let pCrit = values.allyCritRate - values.critIgnore;
-
-  // 0未満は0に切り上げるが、上限は設けず 100% 超もそのまま使用する
-  pMulti = Math.max(0, pMulti);
-  pCrit = Math.max(0, pCrit);
-
-  const expectedMultiplier =
-    (1 + pMulti * values.multiCoeff) * (1 + pCrit * values.critCoeff);
-
-  const expectedDamage = baseDamage * expectedMultiplier;
-
-  return {
-    baseDamage,
-    expectedDamage,
-    pMulti,
-    pCrit,
-  };
-}
-
-function updateResults(result, errorMessage) {
-  const errorEl = document.getElementById("resultError");
-  const baseDamageEl = document.getElementById("baseDamageOutput");
-  const expectedDamageEl = document.getElementById("expectedDamageOutput");
-  const pMultiEl = document.getElementById("pMultiOutput");
-  const pCritEl = document.getElementById("pCritOutput");
-
-  if (errorMessage) {
-    errorEl.textContent = errorMessage;
-    baseDamageEl.textContent = "-";
-    expectedDamageEl.textContent = "-";
-    pMultiEl.textContent = "-";
-    pCritEl.textContent = "-";
-    return;
-  }
-
-  errorEl.textContent = "";
-  baseDamageEl.textContent = formatNumber(result.baseDamage);
-  expectedDamageEl.textContent = formatNumber(result.expectedDamage);
-  pMultiEl.textContent = formatNumber(result.pMulti);
-  pCritEl.textContent = formatNumber(result.pCrit);
-}
-
-function handleCalculate() {
-  const values = getInputValues();
-  const error = validateInputs(values);
-  if (error) {
-    updateResults(null, error);
-    return;
-  }
-
-  const result = computeDamage(values);
-  updateResults(result, null);
-}
-
-function handleReset() {
-  const inputs = document.querySelectorAll("input[type='number']");
-  inputs.forEach((input) => {
-    input.value = "";
-  });
-
-  updateResults(
-    {
-      baseDamage: NaN,
-      expectedDamage: NaN,
-      pMulti: NaN,
-      pCrit: NaN,
-    },
-    ""
-  );
-}
-
-function init() {
-  const calcButton = document.getElementById("calcButton");
-  const resetButton = document.getElementById("resetButton");
-
-  if (calcButton) {
-    calcButton.addEventListener("click", handleCalculate);
-  }
-  if (resetButton) {
-    resetButton.addEventListener("click", handleReset);
-  }
-}
-
-if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", init);
-} else {
-  init();
-}
-
-function clamp(value, min, max) {
-  return Math.min(Math.max(value, min), max);
-}
-
-function toNumber(value) {
-  if (value === "" || value === null || value === undefined) return NaN;
-  return Number(value);
-}
-
-function formatNumber(value) {
-  if (!Number.isFinite(value)) return "-";
-  return value.toFixed(2);
-}
-
-function getInputValues() {
-  const allyAtk = toNumber(document.getElementById("allyAtk").value);
-  const allyDamage = toNumber(document.getElementById("allyDamage").value);
-  const allyMultiRate = toNumber(
-    document.getElementById("allyMultiRate").value
-  );
-  const allyCritRate = toNumber(document.getElementById("allyCritRate").value);
-  const enemyDef = toNumber(document.getElementById("enemyDef").value);
-  const allyDamageReduction = toNumber(
-    document.getElementById("allyDamageReduction").value
-  );
-  const multiIgnore = toNumber(
-    document.getElementById("multiIgnore").value
-  );
-  const critIgnore = toNumber(document.getElementById("critIgnore").value);
-  const multiCoeff = toNumber(
-    document.getElementById("multiCoeff").value
-  );
-  const critCoeff = toNumber(document.getElementById("critCoeff").value);
-  const critDamage = toNumber(
-    document.getElementById("critDamage").value
-  );
-  const critResist = toNumber(
-    document.getElementById("critResist").value
-  );
-
-  return {
-    allyAtk,
-    allyDamage,
-    allyMultiRate,
-    allyCritRate,
-    enemyDef,
-    allyDamageReduction,
-    multiIgnore,
-    critIgnore,
-    multiCoeff,
-    critCoeff,
-    critDamage,
-    critResist,
-  };
-}
-
-function validateInputs(values) {
-  const requiredFields = [
-    "allyAtk",
-    "allyDamage",
-    "enemyDef",
-    "allyDamageReduction",
-    "allyMultiRate",
-    "allyCritRate",
-    "multiIgnore",
-    "critIgnore",
-    "multiCoeff",
-    "critCoeff",
-    "critDamage",
-    "critResist",
-  ];
-
-  for (const key of requiredFields) {
-    if (!Number.isFinite(values[key])) {
-      return `入力が不足しているか数値として解釈できません: ${key}`;
-    }
-    if (values[key] < 0) {
-      return `0未満の値は想定していません: ${key}`;
-    }
-  }
-
-  return null;
-}
-
-function computeDamage(values) {
-  const atkMinusDef = Math.max(0, values.allyAtk - values.enemyDef);
-  const damageFactor = Math.max(
-    0,
-    values.allyDamage - values.allyDamageReduction
-  );
-  const critBaseFactor = Math.max(
-    0,
-    values.critDamage - values.critResist
-  );
-
-  const baseDamage = atkMinusDef * damageFactor * critBaseFactor;
-
-  let pMulti = values.allyMultiRate - values.multiIgnore;
-  let pCrit = values.allyCritRate - values.critIgnore;
-
-  pMulti = clamp(pMulti, 0, 1);
-  pCrit = clamp(pCrit, 0, 1);
-
-  const expectedMultiplier =
-    (1 + pMulti * values.multiCoeff) * (1 + pCrit * values.critCoeff);
-
-  const expectedDamage = baseDamage * expectedMultiplier;
-
-  return {
-    baseDamage,
-    expectedDamage,
-    pMulti,
-    pCrit,
-  };
-}
-
-function updateResults(result, errorMessage) {
-  const errorEl = document.getElementById("resultError");
-  const baseDamageEl = document.getElementById("baseDamageOutput");
-  const expectedDamageEl = document.getElementById("expectedDamageOutput");
-  const pMultiEl = document.getElementById("pMultiOutput");
-  const pCritEl = document.getElementById("pCritOutput");
-
-  if (errorMessage) {
-    errorEl.textContent = errorMessage;
-    baseDamageEl.textContent = "-";
-    expectedDamageEl.textContent = "-";
-    pMultiEl.textContent = "-";
-    pCritEl.textContent = "-";
-    return;
-  }
-
-  errorEl.textContent = "";
-  baseDamageEl.textContent = formatNumber(result.baseDamage);
-  expectedDamageEl.textContent = formatNumber(result.expectedDamage);
-  pMultiEl.textContent = formatNumber(result.pMulti);
-  pCritEl.textContent = formatNumber(result.pCrit);
-}
-
-function handleCalculate() {
-  const values = getInputValues();
-  const error = validateInputs(values);
-  if (error) {
-    updateResults(null, error);
-    return;
-  }
-
-  const result = computeDamage(values);
-  updateResults(result, null);
-}
-
-function handleReset() {
-  const inputs = document.querySelectorAll("input[type='number']");
-  inputs.forEach((input) => {
-    input.value = "";
-  });
-
-  updateResults(
-    {
-      baseDamage: NaN,
-      expectedDamage: NaN,
-      pMulti: NaN,
-      pCrit: NaN,
-    },
-    ""
-  );
-}
-
-function init() {
-  const calcButton = document.getElementById("calcButton");
-  const resetButton = document.getElementById("resetButton");
-
-  if (calcButton) {
-    calcButton.addEventListener("click", handleCalculate);
-  }
-  if (resetButton) {
-    resetButton.addEventListener("click", handleReset);
-  }
-}
-
-if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", init);
-} else {
-  init();
-}
-
