@@ -55,9 +55,9 @@ function computeDamage(v) {
     * (v.allyDamage / 100)
     * (1 - effReduction / 100);
 
-  // --- 連撃乗数 ---
-  const effectiveMultiRate = Math.max(0, v.multiRate - v.multiIgnore) / 100;
-  const multiMult = 1 + effectiveMultiRate; // 連撃は+100%
+  // --- 連撃乗数（有効連撃率は100%上限）---
+  const effectiveMultiRate = Math.min(1.0, Math.max(0, v.multiRate - v.multiIgnore) / 100);
+  const multiMult = 1 + effectiveMultiRate; // 連撃は+100%、最大2.0x
 
   // --- 会心乗数 ---
   const effectiveCritRate = Math.max(0, v.critRate - v.critIgnore) / 100;
