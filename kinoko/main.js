@@ -5,6 +5,11 @@ function getVal(id) {
   return isNaN(v) ? null : v;
 }
 
+function getEvadePattern() {
+  const el = document.querySelector('input[name="evadePattern"]:checked');
+  return el ? el.value : "A";
+}
+
 function getInputs() {
   return {
     atk:             getVal("atk"),
@@ -19,6 +24,10 @@ function getInputs() {
     critResist:      getVal("critResist"),      // null = 未入力 → 100 扱い
     inspire:         getVal("inspire")         ?? 0,
     resist:          getVal("resist")          ?? 0,
+    evadeRate:       getVal("evadeRate")       ?? 0,
+    allyEvadeIgnore: getVal("allyEvadeIgnore") ?? 0, // % 直接入力
+    evadeIgnore:     getVal("evadeIgnore")     ?? 0,
+    evadePattern:    getEvadePattern(),
   };
 }
 
@@ -65,10 +74,17 @@ function computeDamage(v) {
   const critEff = Math.max(1.5, v.critDamage / critResistVal);
   const critMult = 1 + effectiveCritRate * (critEff - 1);
 
-  // --- 期待ダメージ ---
-  const expectedDamage = baseDamage * multiMult * critMult;
+  // --- 回避（命中率）---
+  const evadeCoeff = v.evadePattern === "B" ? 0.6 : 0.4;
+  const finalEvadeIgnore = v.allyEvadeIgnore + v.evadeIgnore * evadeCoeff;
+  const rawEvade = Math.max(0, v.evadeRate - finalEvadeIgnore);
+  const effEvade = Math.min(80, Math.pow(rawEvade, 0.9));
+  const hitRate = 1 - effEvade / 100;
 
-  return { baseDamage, expectedDamage, effReduction, multiMult, critMult };
+  // --- 期待ダメージ ---
+  const expectedDamage = baseDamage * multiMult * critMult * hitRate;
+
+  return { baseDamage, expectedDamage, effReduction, multiMult, critMult, effEvade, hitRate };
 }
 
 // ---- 表示 ----
@@ -98,15 +114,13 @@ function render(result) {
   const redEl    = document.getElementById("effReduction");
   const multiEl  = document.getElementById("multiMult");
   const critEl   = document.getElementById("critMult");
+  const evadeEl  = document.getElementById("effEvade");
+  const hitEl    = document.getElementById("hitRate");
   const cardEl   = document.getElementById("resultCard");
 
   if (!result) {
     errorEl.textContent = "攻撃力・防御力・仲間ダメージを入力してください。";
-    expEl.textContent  = "-";
-    baseEl.textContent = "-";
-    redEl.textContent  = "-";
-    multiEl.textContent = "-";
-    critEl.textContent  = "-";
+    [expEl, baseEl, redEl, multiEl, critEl, evadeEl, hitEl].forEach(el => { el.textContent = "-"; });
     cardEl.classList.remove("has-result");
     return;
   }
@@ -117,6 +131,8 @@ function render(result) {
   redEl.textContent   = fmtPct(result.effReduction);
   multiEl.textContent = fmtMult(result.multiMult);
   critEl.textContent  = fmtMult(result.critMult);
+  evadeEl.textContent = fmtPct(result.effEvade);
+  hitEl.textContent   = fmtPct(result.hitRate * 100);
   cardEl.classList.add("has-result");
 }
 
@@ -140,6 +156,9 @@ function handleReset() {
 function init() {
   document.querySelectorAll("input[type='number']").forEach(el => {
     el.addEventListener("input", handleInput);
+  });
+  document.querySelectorAll('input[name="evadePattern"]').forEach(el => {
+    el.addEventListener("change", handleInput);
   });
   document.getElementById("resetButton").addEventListener("click", handleReset);
 }

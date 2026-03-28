@@ -48,6 +48,14 @@
             <span class="stat-label">仲間鼓舞 <small>（値）</small></span>
             <input id="inspire" type="number" inputmode="numeric" placeholder="例: 6000" data-ocr="inspire" />
           </label>
+          <label class="stat-field">
+            <span class="stat-label">仲間回避無視 <small>%</small></span>
+            <input id="allyEvadeIgnore" type="number" inputmode="numeric" placeholder="例: 30" data-ocr="allyEvadeIgnore" />
+          </label>
+          <label class="stat-field">
+            <span class="stat-label">回避無視 <small>%</small></span>
+            <input id="evadeIgnore" type="number" inputmode="numeric" placeholder="例: 20" data-ocr="evadeIgnore" />
+          </label>
         </div>
       </section>
 
@@ -84,8 +92,27 @@
             <span class="stat-label">仲間抵抗 <small>（値）</small></span>
             <input id="resist" type="number" inputmode="numeric" placeholder="例: 0" data-ocr="resist" />
           </label>
+          <label class="stat-field">
+            <span class="stat-label">回避率 <small>%</small></span>
+            <input id="evadeRate" type="number" inputmode="numeric" placeholder="例: 30" data-ocr="evadeRate" />
+          </label>
         </div>
       </section>
+    </div>
+
+    <!-- 仲間編成パターン選択 -->
+    <div class="pattern-selector">
+      <span class="pattern-label">仲間編成パターン（回避無視の計算方式）</span>
+      <div class="pattern-toggle">
+        <label class="pattern-option">
+          <input type="radio" name="evadePattern" value="A" checked />
+          <span>パターンA <small>仲間回避無視 + 回避無視 × 0.4</small></span>
+        </label>
+        <label class="pattern-option">
+          <input type="radio" name="evadePattern" value="B" />
+          <span>パターンB <small>仲間回避無視 + 回避無視 × 0.6</small></span>
+        </label>
+      </div>
     </div>
 
     <!-- 計算結果 -->
@@ -114,6 +141,14 @@
           <span class="breakdown-label">会心乗数</span>
           <span class="breakdown-value" id="critMult">-</span>
         </div>
+        <div class="breakdown-item">
+          <span class="breakdown-label">有効回避率</span>
+          <span class="breakdown-value" id="effEvade">-</span>
+        </div>
+        <div class="breakdown-item">
+          <span class="breakdown-label">命中率</span>
+          <span class="breakdown-value" id="hitRate">-</span>
+        </div>
       </div>
     </section>
 
@@ -125,7 +160,7 @@
   </main>
 
   <footer class="app-footer">
-    <p>期待ダメ = (攻撃力−防御力) × 仲間ダメ% × (1−有効軽減%) × 連撃乗数 × 会心乗数</p>
+    <p>期待ダメ = (攻撃力−防御力) × 仲間ダメ% × (1−有効軽減%) × 連撃乗数 × 会心乗数 × 命中率</p>
   </footer>
 
   <script src="./main.js"></script>
