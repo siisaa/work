@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>キノコ伝説 育成最適化</title>
+  <link rel="stylesheet" href="./style.css" />
+  <style>
+    .page-nav {
+      display: flex;
+      justify-content: center;
+      gap: 0.75rem;
+      padding: 0.75rem 1rem 0;
+    }
+    .page-nav a {
+      font-size: 0.82rem;
+      padding: 0.35rem 1rem;
+      border-radius: 9999px;
+      border: 1px solid rgba(148,163,184,0.3);
+      color: #9ca3af;
+      text-decoration: none;
+      transition: background 0.15s, color 0.15s;
+    }
+    .page-nav a:hover { background: rgba(148,163,184,0.1); color: #e5e7eb; }
+    .page-nav a.active {
+      border-color: #f59e0b;
+      color: #fbbf24;
+      background: rgba(245,158,11,0.1);
+    }
+
+    /* 入力グリッド */
+    .input-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.75rem;
+    }
+    @media (max-width: 640px) {
+      .input-grid { grid-template-columns: 1fr; }
+    }
+
+    .opt-card {
+      background: rgba(15,23,42,0.85);
+      border: 1px solid rgba(148,163,184,0.15);
+      border-radius: 0.75rem;
+      padding: 1rem;
+    }
+    .opt-card h3 {
+      margin: 0 0 0.75rem;
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: #e5e7eb;
+    }
+    .opt-card h3 .tag {
+      font-size: 0.72rem;
+      font-weight: 400;
+      color: #6b7280;
+      margin-left: 0.4rem;
+    }
+
+    /* 覚醒レベル入力 */
+    .lv-row {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 0.5rem;
+    }
+    .lv-label {
+      font-size: 0.82rem;
+      color: #d1d5db;
+      min-width: 5.5rem;
+    }
+    .lv-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 1.6rem;
+      height: 1.6rem;
+      border-radius: 50%;
+      font-size: 0.72rem;
+      font-weight: 700;
+    }
+    .lv-badge.badge-I   { background: rgba(56,189,248,0.15); color: #38bdf8; border: 1px solid rgba(56,189,248,0.4); }
+    .lv-badge.badge-III { background: rgba(34,197,94,0.15);  color: #22c55e; border: 1px solid rgba(34,197,94,0.4);  }
+    .lv-badge.badge-VI  { background: rgba(251,191,36,0.15); color: #fbbf24; border: 1px solid rgba(251,191,36,0.4); }
+
+    .lv-input {
+      width: 4.5rem !important;
+    }
+    .lv-stat {
+      font-size: 0.75rem;
+      color: #6b7280;
+    }
+
+    /* 書の枚数 */
+    .books-section {
+      background: rgba(15,23,42,0.85);
+      border: 1px solid rgba(148,163,184,0.15);
+      border-radius: 0.75rem;
+      padding: 0.9rem 1.1rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+    .books-label { font-size: 0.85rem; color: #9ca3af; }
+    .books-input-wrap { display: flex; align-items: center; gap: 0.5rem; }
+    .books-unit { font-size: 0.82rem; color: #6b7280; }
+    #books { width: 7rem !important; }
+
+    /* 結果 */
+    .opt-result {
+      background: rgba(15,23,42,0.9);
+      border: 1px solid rgba(148,163,184,0.15);
+      border-radius: 0.75rem;
+      padding: 1.25rem;
+      transition: border-color 0.3s, box-shadow 0.3s;
+    }
+    .opt-result.has-result {
+      border-color: rgba(34,197,94,0.4);
+      box-shadow: 0 0 32px rgba(34,197,94,0.1);
+    }
+
+    .opt-error {
+      min-height: 1rem;
+      font-size: 0.8rem;
+      color: #fca5a5;
+      margin-bottom: 0.5rem;
+    }
+
+    .result-top {
+      display: grid;
+      grid-template-columns: repeat(3,1fr);
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+    }
+    @media (max-width: 480px) {
+      .result-top { grid-template-columns: repeat(2,1fr); }
+    }
+    .result-metric {
+      padding: 0.6rem 0.75rem;
+      border-radius: 0.4rem;
+      background: rgba(2,6,23,0.5);
+    }
+    .result-metric-label { font-size: 0.72rem; color: #6b7280; margin-bottom: 0.15rem; }
+    .result-metric-value { font-size: 1rem; font-weight: 700; color: #e5e7eb; }
+    .result-metric-value.highlight { color: #22c55e; font-size: 1.15rem; }
+    .result-metric-value.pct { color: #fbbf24; }
+
+    .allocation {
+      display: grid;
+      grid-template-columns: repeat(3,1fr);
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+    }
+    @media (max-width: 480px) { .allocation { grid-template-columns: 1fr; } }
+    .alloc-item {
+      padding: 0.5rem 0.6rem;
+      border-radius: 0.4rem;
+      background: rgba(2,6,23,0.5);
+      display: flex;
+      flex-direction: column;
+      gap: 0.15rem;
+    }
+    .alloc-item-label { font-size: 0.72rem; color: #6b7280; }
+    .alloc-item-value { font-size: 0.9rem; font-weight: 600; color: #d1d5db; }
+
+    .chart-wrap {
+      position: relative;
+      height: 220px;
+      margin-top: 0.75rem;
+    }
+    @media (max-width: 480px) {
+      .chart-wrap { height: 260px; }
+    }
+
+    .section-divider {
+      border: none;
+      border-top: 1px solid rgba(148,163,184,0.1);
+      margin: 0.25rem 0 0.75rem;
+    }
+  </style>
+</head>
+<body>
+  <header class="app-header">
+    <h1>キノコ伝説 育成最適化</h1>
+    <p class="app-header__subtitle">覚醒の書の最適な割り振りを計算します</p>
+  </header>
+
+  <nav class="page-nav">
+    <a href="./index.html">ダメージ計算</a>
+    <a href="./optimize.html" class="active">育成最適化</a>
+  </nav>
+
+  <main class="app-main">
+
+    <!-- 入力エリア -->
+    <div class="input-grid">
+
+      <!-- 自キャラ現在値 -->
+      <div class="opt-card">
+        <h3>自キャラ <span class="tag">ゲーム内表示値を入力</span></h3>
+        <div class="stat-list">
+          <label class="stat-field">
+            <span class="stat-label">現在の攻撃力</span>
+            <input id="curAtk" type="number" inputmode="numeric" placeholder="例: 250000" />
+          </label>
+          <label class="stat-field">
+            <span class="stat-label">現在の仲間ダメージ <small>%</small></span>
+            <input id="curAllyDmg" type="number" inputmode="numeric" placeholder="例: 600" />
+          </label>
+          <label class="stat-field">
+            <span class="stat-label">現在の会心ダメージ <small>%</small></span>
+            <input id="curCritDmg" type="number" inputmode="numeric" placeholder="例: 500" />
+          </label>
+          <label class="stat-field">
+            <span class="stat-label">仲間会心率 <small>%</small></span>
+            <input id="critRate2" type="number" inputmode="numeric" placeholder="例: 35" />
+          </label>
+          <label class="stat-field">
+            <span class="stat-label">仲間連撃率 <small>%</small></span>
+            <input id="multiRate2" type="number" inputmode="numeric" placeholder="例: 30" />
+          </label>
+        </div>
+
+        <hr class="section-divider" />
+        <h3>現在の覚醒レベル</h3>
+
+        <div class="lv-row">
+          <span class="lv-badge badge-I">Ⅰ</span>
+          <span class="lv-label">攻撃乗算</span>
+          <input id="lvI" class="lv-input" type="number" inputmode="numeric" min="1" max="200" value="1" />
+          <span id="statI" class="lv-stat"></span>
+        </div>
+        <div class="lv-row">
+          <span class="lv-badge badge-III">Ⅲ</span>
+          <span class="lv-label">仲間ダメ</span>
+          <input id="lvIII" class="lv-input" type="number" inputmode="numeric" min="1" max="200" value="1" />
+          <span id="statIII" class="lv-stat"></span>
+        </div>
+        <div class="lv-row">
+          <span class="lv-badge badge-VI">Ⅵ</span>
+          <span class="lv-label">仲間会心ダメ</span>
+          <input id="lvVI" class="lv-input" type="number" inputmode="numeric" min="1" max="200" value="1" />
+          <span id="statVI" class="lv-stat"></span>
+        </div>
+      </div>
+
+      <!-- 敵ステータス -->
+      <div class="opt-card">
+        <h3>相手ステータス</h3>
+        <div class="stat-list">
+          <label class="stat-field">
+            <span class="stat-label">防御力</span>
+            <input id="def2" type="number" inputmode="numeric" placeholder="例: 150000" />
+          </label>
+          <label class="stat-field">
+            <span class="stat-label">仲間ダメ軽減 <small>%</small></span>
+            <input id="damageReduction2" type="number" inputmode="numeric" placeholder="例: 40" />
+          </label>
+          <label class="stat-field">
+            <span class="stat-label">会心無視 <small>%</small></span>
+            <input id="critIgnore2" type="number" inputmode="numeric" placeholder="例: 0" />
+          </label>
+          <label class="stat-field">
+            <span class="stat-label">会心抵抗 <small>%（未入力=100）</small></span>
+            <input id="critResist2" type="number" inputmode="numeric" placeholder="例: 100" />
+          </label>
+          <label class="stat-field">
+            <span class="stat-label">連撃無視 <small>%</small></span>
+            <input id="multiIgnore2" type="number" inputmode="numeric" placeholder="例: 0" />
+          </label>
+          <label class="stat-field">
+            <span class="stat-label">仲間抵抗 <small>（値）</small></span>
+            <input id="resist2" type="number" inputmode="numeric" placeholder="例: 0" />
+          </label>
+          <label class="stat-field">
+            <span class="stat-label">回避率 <small>%</small></span>
+            <input id="evadeRate2" type="number" inputmode="numeric" placeholder="例: 0" />
+          </label>
+        </div>
+
+        <hr class="section-divider" />
+        <h3>その他 <span class="tag">固定ステータス</span></h3>
+        <div class="stat-list">
+          <label class="stat-field">
+            <span class="stat-label">仲間鼓舞 <small>（値）</small></span>
+            <input id="inspire2" type="number" inputmode="numeric" placeholder="例: 0" />
+          </label>
+          <label class="stat-field">
+            <span class="stat-label">仲間回避無視 <small>%</small></span>
+            <input id="allyEvadeIgnore2" type="number" inputmode="numeric" placeholder="例: 0" />
+          </label>
+          <label class="stat-field">
+            <span class="stat-label">回避無視 <small>%</small></span>
+            <input id="evadeIgnore2" type="number" inputmode="numeric" placeholder="例: 0" />
+          </label>
+        </div>
+        <!-- パターン選択（小型） -->
+        <div style="margin-top:0.6rem; display:flex; gap:0.5rem; flex-wrap:wrap;">
+          <label class="pattern-option" style="font-size:0.78rem; padding:0.35rem 0.75rem;">
+            <input type="radio" name="evadePattern2" value="A" checked />
+            <span>パターンA <small>×0.4</small></span>
+          </label>
+          <label class="pattern-option" style="font-size:0.78rem; padding:0.35rem 0.75rem;">
+            <input type="radio" name="evadePattern2" value="B" />
+            <span>パターンB <small>×0.6</small></span>
+          </label>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- 覚醒の書 -->
+    <div class="books-section">
+      <span class="books-label">追加で使える覚醒の書</span>
+      <div class="books-input-wrap">
+        <input id="books" type="number" inputmode="numeric" min="0" placeholder="例: 500" />
+        <span class="books-unit">枚</span>
+      </div>
+    </div>
+
+    <!-- 計算結果 -->
+    <section class="opt-result" id="optResult">
+      <div id="optError" class="opt-error" aria-live="polite"></div>
+
+      <div class="result-top">
+        <div class="result-metric">
+          <div class="result-metric-label">現在の期待ダメ</div>
+          <div class="result-metric-value" id="resCurrentDmg">-</div>
+        </div>
+        <div class="result-metric">
+          <div class="result-metric-label">最適後の期待ダメ</div>
+          <div class="result-metric-value highlight" id="resOptDmg">-</div>
+        </div>
+        <div class="result-metric">
+          <div class="result-metric-label">ダメージ増加率</div>
+          <div class="result-metric-value pct" id="resIncrease">-</div>
+        </div>
+      </div>
+
+      <h3 style="margin:0 0 0.5rem; font-size:0.85rem; color:#9ca3af;">推奨覚醒配分</h3>
+      <div class="allocation">
+        <div class="alloc-item">
+          <span class="alloc-item-label"><span style="color:#38bdf8">Ⅰ</span> 攻撃乗算</span>
+          <span class="alloc-item-value" id="resLvI">-</span>
+        </div>
+        <div class="alloc-item">
+          <span class="alloc-item-label"><span style="color:#22c55e">Ⅲ</span> 仲間ダメ</span>
+          <span class="alloc-item-value" id="resLvIII">-</span>
+        </div>
+        <div class="alloc-item">
+          <span class="alloc-item-label"><span style="color:#fbbf24">Ⅵ</span> 仲間会心ダメ</span>
+          <span class="alloc-item-value" id="resLvVI">-</span>
+        </div>
+      </div>
+      <div style="font-size:0.78rem; color:#6b7280; margin-bottom:0.75rem;">
+        使用書数: <span id="resBooks">-</span>
+      </div>
+
+      <div class="chart-wrap">
+        <canvas id="optChart"></canvas>
+      </div>
+    </section>
+
+    <!-- リセット -->
+    <div class="actions">
+      <button id="resetBtn" class="reset-button">リセット</button>
+    </div>
+
+  </main>
+
+  <footer class="app-footer">
+    <p>攻撃乗算Ⅰ: 攻撃力×(1+Ⅰ%/100)　仲間ダメⅢ: 仲間ダメ%+Ⅲ%　仲間会心ダメⅥ: 会心ダメ%+Ⅵ%</p>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+  <script src="./optimize.js"></script>
+  <script>
+    // 覚醒レベル変化時にボーナス値を表示
+    function updateLvStats() {
+      const lvI   = parseInt(document.getElementById("lvI").value, 10) || 1;
+      const lvIII = parseInt(document.getElementById("lvIII").value, 10) || 1;
+      const lvVI  = parseInt(document.getElementById("lvVI").value, 10) || 1;
+      const clamp = v => Math.min(200, Math.max(1, v));
+      const di = AWK[clamp(lvI)];
+      const diii = AWK[clamp(lvIII)];
+      const dvi  = AWK[clamp(lvVI)];
+      if (di)   document.getElementById("statI").textContent   = `+${di[1]}%`;
+      if (diii) document.getElementById("statIII").textContent = `+${diii[2]}%`;
+      if (dvi)  document.getElementById("statVI").textContent  = `+${dvi[3]}%`;
+    }
+    ["lvI","lvIII","lvVI"].forEach(id => {
+      document.getElementById(id).addEventListener("input", updateLvStats);
+    });
+    updateLvStats();
+  </script>
+</body>
+</html>
